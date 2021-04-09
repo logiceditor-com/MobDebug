@@ -2,7 +2,7 @@ package = "MobDebug"
 version = "scm-1"
 
 source = {
-   url = "git://github.com/pkulchenko/MobDebug.git",
+   url = "git://github.com/logiceditor-com/MobDebug.git",
    branch = "master"
 }
 
