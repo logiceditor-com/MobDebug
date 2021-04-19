@@ -28,6 +28,7 @@ local mobdebug = {
   connecttimeout = 2, -- connect timeout (s)
   printline = false,
   printhook = false,
+  root_dir = nil, -- set if auto root detection fails
 }
 
 local HOOKMASK = "lcr"
@@ -505,6 +506,19 @@ local function readnext(peer, num)
   return res or partial or '', err
 end
 
+local function fix_filename(file)
+  if not mobdebug.root_dir then
+    return file
+  end
+  if file:sub(1, #mobdebug.root_dir) == mobdebug.root_dir then
+    file = file:sub(#mobdebug.root_dir + 1)
+    if mobdebug.printline then
+      print('filename fixed to', file)
+    end
+  end
+  return file
+end
+
 local function handle_breakpoint(peer)
   -- check if the buffer has the beginning of SETB/DELB command;
   -- this is to avoid reading the entire line for commands that
@@ -805,6 +819,7 @@ local function debugger_loop(sev, svars, sfile, sline)
       print('error getting the command')
     elseif command == "SETB" then
       local _, _, _, file, line = string.find(line, "^([A-Z]+)%s+(.-)%s+(%d+)%s*$")
+      file = fix_filename(file)
       if file and line then
         set_breakpoint(file, tonumber(line))
         server:send("200 OK\n")
@@ -813,6 +828,7 @@ local function debugger_loop(sev, svars, sfile, sline)
       end
     elseif command == "DELB" then
       local _, _, _, file, line = string.find(line, "^([A-Z]+)%s+(.-)%s+(%d+)%s*$")
+      file = fix_filename(file)
       if file and line then
         remove_breakpoint(file, tonumber(line))
         server:send("200 OK\n")
