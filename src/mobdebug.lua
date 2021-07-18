@@ -28,7 +28,8 @@ local mobdebug = {
   connecttimeout = 2, -- connect timeout (s)
   printline = false,
   printhook = false,
-  root_dir = nil, -- set if auto root detection fails
+  remote_root_dir = nil,
+  local_root_dir = nil,
 }
 
 local HOOKMASK = "lcr"
@@ -335,8 +336,16 @@ local function stack(start)
       if src:find("%./") == 1 then src = src:sub(3) end
     end
 
+    if
+      mobdebug.remote_root_dir
+      and src:find(mobdebug.remote_root_dir, 1, true) == 1
+    then
+      src = (mobdebug.local_root_dir or "")
+        .. src:sub(#mobdebug.remote_root_dir + 1)
+    end
+
     table.insert(stack, { -- remove basedir from source
-      {source.name, removebasedir(src, basedir),
+      {source.name, src,
        linemap and linemap(source.linedefined, source.source) or source.linedefined,
        linemap and linemap(source.currentline, source.source) or source.currentline,
        source.what, source.namewhat, source.short_src},
@@ -506,19 +515,6 @@ local function readnext(peer, num)
   return res or partial or '', err
 end
 
-local function fix_filename(file)
-  if not mobdebug.root_dir then
-    return file
-  end
-  if file:sub(1, #mobdebug.root_dir) == mobdebug.root_dir then
-    file = file:sub(#mobdebug.root_dir + 1)
-    if mobdebug.printline then
-      print('filename fixed to', file)
-    end
-  end
-  return file
-end
-
 local function handle_breakpoint(peer)
   -- check if the buffer has the beginning of SETB/DELB command;
   -- this is to avoid reading the entire line for commands that
@@ -654,7 +650,14 @@ local function debug_hook(event, line)
       -- what is the filename and what is the source code.
       -- If the name doesn't start with `@`, assume it's a file name if it's all on one line.
       if find(file, "^@") or not find(file, "[\r\n]") then
-        file = gsub(gsub(file, "^@", ""), "\\", "/")
+        if
+          mobdebug.remote_root_dir
+          and file:find(mobdebug.remote_root_dir, 1, true) == 2
+        then
+          file = (mobdebug.local_root_dir or "")
+            .. file:sub(#mobdebug.remote_root_dir + 2)
+        end
+        file = gsub(gsub(file, "^@", mobdebug.local_root_dir or ""), "\\", "/")
         -- normalize paths that may include up-dir or same-dir references
         -- if the path starts from the up-dir or reference,
         -- prepend `basedir` to generate absolute path to keep breakpoints working.
@@ -819,7 +822,6 @@ local function debugger_loop(sev, svars, sfile, sline)
       print('error getting the command')
     elseif command == "SETB" then
       local _, _, _, file, line = string.find(line, "^([A-Z]+)%s+(.-)%s+(%d+)%s*$")
-      file = fix_filename(file)
       if file and line then
         set_breakpoint(file, tonumber(line))
         server:send("200 OK\n")
@@ -828,7 +830,6 @@ local function debugger_loop(sev, svars, sfile, sline)
       end
     elseif command == "DELB" then
       local _, _, _, file, line = string.find(line, "^([A-Z]+)%s+(.-)%s+(%d+)%s*$")
-      file = fix_filename(file)
       if file and line then
         remove_breakpoint(file, tonumber(line))
         server:send("200 OK\n")
