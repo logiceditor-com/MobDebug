@@ -30,6 +30,7 @@ local mobdebug = {
   printhook = false,
   remote_root_dir = nil,
   local_root_dir = nil,
+  error_on_could_not_connect = false,
 }
 
 local HOOKMASK = "lcr"
@@ -1145,8 +1146,10 @@ local function start(controller_host, controller_port)
     step_into = true -- start with step command
     return true
   else
-    print(("Could not connect to %s:%s: %s")
-      :format(controller_host, controller_port, err or "unknown error"))
+    (mobdebug.error_on_could_not_connect and error or print)(
+      ("Could not connect to %s:%s: %s")
+      :format(controller_host, controller_port, err or "unknown error")
+    )
   end
 end
 
